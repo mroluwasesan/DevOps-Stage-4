@@ -1,67 +1,187 @@
+# version: "3.8"
+# services:
+#   redis-queue:
+#     image: redis:latest
+#     ports:
+#       - "6379:6379"
+
+#   users-api:
+#     build:
+#       context: ./users-api
+#     environment:
+#       SERVER_PORT: 8083
+#       JWT_SECRET: myfancysecret
+#     ports:
+#       - "8083:8083"
+#     depends_on:
+#       - redis-queue
+
+#   auth-api:
+#     build:
+#       context: ./auth-api
+#     environment:
+#       AUTH_API_PORT: 8081
+#       JWT_SECRET: myfancysecret
+#       USERS_API_ADDRESS: http://users-api:8083
+#     ports:
+#       - "8081:8081"
+#     depends_on:
+#       - users-api
+
+#   todos-api:
+#     build:
+#       context: ./todos-api
+#     environment:
+#       TODO_API_PORT: 8082
+#       JWT_SECRET: myfancysecret
+#       REDIS_HOST: redis-queue
+#       REDIS_PORT: 6379
+#       REDIS_CHANNEL: log_channel
+#     ports:
+#       - "8082:8082"
+#     depends_on:
+#       - redis-queue
+#       - auth-api
+
+#   log-message-processor:
+#     build:
+#       context: ./log-message-processor
+#     environment:
+#       REDIS_HOST: redis-queue
+#       REDIS_PORT: 6379
+#       REDIS_CHANNEL: log_channel
+#     depends_on:
+#       - redis-queue
+
+#   frontend:
+#     build:
+#       context: ./frontend
+#     environment:
+#       PORT: 8080
+#       AUTH_API_ADDRESS: http://auth-api:8081
+#       TODOS_API_ADDRESS: http://todos-api:8082
+#     ports:
+#       - "8080:8080"
+#     depends_on:
+#       - auth-api
+#       - todos-api
+
+
+
+
+#------------------------------------------------------------
+
+#testing traefik setup
+
+
 version: "3.8"
 services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"        # HTTP
+      - "443:443"      # HTTPS
+      - "8080:8080"    # Traefik Dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - traefik_network
+
   redis-queue:
     image: redis:latest
     ports:
       - "6379:6379"
+    networks:
+      - app_network
 
   users-api:
-    build:
-      context: ./users-api
+    build: ./users-api
     environment:
       SERVER_PORT: 8083
       JWT_SECRET: myfancysecret
-    ports:
-      - "8083:8083"
-    depends_on:
-      - redis-queue
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.users-api.rule=Host(`users.domain.com`)"
+      - "traefik.http.routers.users-api.entrypoints=websecure"
+      - "traefik.http.routers.users-api.tls.certresolver=myresolver"
+      - "traefik.http.services.users-api.loadbalancer.server.port=8083"
+    networks:
+      - traefik_network
+      - app_network
 
   auth-api:
-    build:
-      context: ./auth-api
+    build: ./auth-api
     environment:
       AUTH_API_PORT: 8081
       JWT_SECRET: myfancysecret
       USERS_API_ADDRESS: http://users-api:8083
-    ports:
-      - "8081:8081"
-    depends_on:
-      - users-api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-api.rule=Host(`auth.domain.com`)"
+      - "traefik.http.routers.auth-api.entrypoints=websecure"
+      - "traefik.http.routers.auth-api.tls.certresolver=myresolver"
+      - "traefik.http.services.auth-api.loadbalancer.server.port=8081"
+    networks:
+      - traefik_network
+      - app_network
 
   todos-api:
-    build:
-      context: ./todos-api
+    build: ./todos-api
     environment:
       TODO_API_PORT: 8082
       JWT_SECRET: myfancysecret
       REDIS_HOST: redis-queue
       REDIS_PORT: 6379
       REDIS_CHANNEL: log_channel
-    ports:
-      - "8082:8082"
-    depends_on:
-      - redis-queue
-      - auth-api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.todos-api.rule=Host(`todos.domain.com`)"
+      - "traefik.http.routers.todos-api.entrypoints=websecure"
+      - "traefik.http.routers.todos-api.tls.certresolver=myresolver"
+      - "traefik.http.services.todos-api.loadbalancer.server.port=8082"
+    networks:
+      - traefik_network
+      - app_network
 
   log-message-processor:
-    build:
-      context: ./log-message-processor
+    build: ./log-message-processor
     environment:
       REDIS_HOST: redis-queue
       REDIS_PORT: 6379
       REDIS_CHANNEL: log_channel
-    depends_on:
-      - redis-queue
+    networks:
+      - app_network
 
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     environment:
       PORT: 8080
       AUTH_API_ADDRESS: http://auth-api:8081
       TODOS_API_ADDRESS: http://todos-api:8082
-    ports:
-      - "8080:8080"
-    depends_on:
-      - auth-api
-      - todos-api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`domain.com`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=8080"
+    networks:
+      - traefik_network
+      - app_network
+
+networks:
+  traefik_network:
+    driver: bridge
+  app_network:
+    driver: bridge
