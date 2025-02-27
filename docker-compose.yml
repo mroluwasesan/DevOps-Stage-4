@@ -78,7 +78,6 @@ version: "3.8"
 services:
   traefik:
     image: traefik:v2.5
-    container_name: traefik
     command:
       - --api.insecure=true
       - --providers.docker
@@ -94,12 +93,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./letsencrypt:/letsencrypt
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.yourdomain.com`)"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
 
   redis-queue:
     image: redis:latest
@@ -114,7 +107,7 @@ services:
       JWT_SECRET: myfancysecret
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.users-api.rule=Host(`users.yourdomain.com`) || Host(`yourdomain.com`) && PathPrefix(`/api/users`)"
+      - "traefik.http.routers.users-api.rule=Host(`users.todo-hng.com`) || Host(`todo-hng.com`) && PathPrefix(`/api/users`)"
       - "traefik.http.routers.users-api.entrypoints=websecure"
       - "traefik.http.routers.users-api.tls.certresolver=myresolver"
     depends_on:
@@ -129,7 +122,7 @@ services:
       USERS_API_ADDRESS: http://users-api:8083
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-api.rule=Host(`auth.yourdomain.com`) || Host(`yourdomain.com`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-api.rule=Host(`auth.todo-hng.com`) || Host(`todo-hng.com`) && PathPrefix(`/api/auth`)"
       - "traefik.http.routers.auth-api.entrypoints=websecure"
       - "traefik.http.routers.auth-api.tls.certresolver=myresolver"
     depends_on:
@@ -146,7 +139,7 @@ services:
       REDIS_CHANNEL: log_channel
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.todos-api.rule=Host(`todos.yourdomain.com`) || Host(`yourdomain.com`) && PathPrefix(`/api/todos`)"
+      - "traefik.http.routers.todos-api.rule=Host(`todos.todo-hng.com`) || Host(`todo-hng.com`) && PathPrefix(`/api/todos`)"
       - "traefik.http.routers.todos-api.entrypoints=websecure"
       - "traefik.http.routers.todos-api.tls.certresolver=myresolver"
     depends_on:
@@ -160,6 +153,8 @@ services:
       REDIS_HOST: redis-queue
       REDIS_PORT: 6379
       REDIS_CHANNEL: log_channel
+    ports:
+      - "8084:8080"  # Expose a port for debugging
     depends_on:
       - redis-queue
 
@@ -172,7 +167,7 @@ services:
       TODOS_API_ADDRESS: http://todos-api:8082
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`yourdomain.com`)"
+      - "traefik.http.routers.frontend.rule=Host(`todo-hng.com`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=myresolver"
     depends_on:
